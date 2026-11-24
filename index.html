@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101112">
+    <meta name="description" content="A simple, privacy-friendly way to explore and watch videos.">
+    <title>NewPipe — watch without the noise</title>
+    <link rel="icon" href="/assets/new_pipe_icon_5.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/app.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#home" aria-label="NewPipe home">
+        <img src="/assets/new_pipe_icon_5.svg" alt="">
+        <span>New<span class="brand-accent">Pipe</span></span>
+        <span class="beta-tag">WEB</span>
+      </a>
+
+      <div class="side-label">LIBRARY</div>
+      <nav class="nav-list">
+        <button class="nav-item is-active" data-view="home" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
+          <span>Home</span>
+        </button>
+        <button class="nav-item" data-view="explore" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4.5 4.5M11 7v8M7 11h8"/></svg>
+          <span>Explore</span>
+        </button>
+        <button class="nav-item" data-view="saved" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-3.8L6 21z"/></svg>
+          <span>Watch later</span><span class="nav-count" id="savedCount">0</span>
+        </button>
+        <button class="nav-item" data-view="history" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/></svg>
+          <span>History</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <div class="privacy-card">
+        <div class="privacy-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 2.8 8.5 7 10 4.2-1.5 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></svg></div>
+        <p>Simple by design.</p>
+        <span>No account. Your library stays on this device.</span>
+      </div>
+      <button class="settings-link" id="openSettings" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3h-.2a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg>
+        <span>Settings</span>
+      </button>
+      <div class="sidebar-footer">Open source · GPL-3.0-or-later</div>
+    </aside>
+
+    <main class="main-shell">
+      <header class="topbar">
+        <form class="search-form" id="searchForm" role="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4.5 4.5"/></svg>
+          <input id="searchInput" name="q" type="search" placeholder="Search videos or paste a link" autocomplete="off" aria-label="Search videos or paste a video link">
+          <kbd>↵</kbd>
+          <button class="search-submit" type="submit" aria-label="Search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4.5 4.5"/></svg>
+          </button>
+        </form>
+        <div class="topbar-actions">
+          <span class="connection-pill"><i></i><span id="connectionLabel">Connecting</span></span>
+          <button class="icon-button" id="topSettings" type="button" aria-label="Settings" title="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3h-.2a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg>
+          </button>
+          <div class="avatar-mark" aria-hidden="true">N</div>
+        </div>
+      </header>
+
+      <div class="content-wrap">
+        <section class="welcome-banner" aria-labelledby="welcomeTitle">
+          <div class="welcome-copy">
+            <span class="eyebrow"><span class="eyebrow-dot"></span> THE WEB, THE NEWPIPE WAY</span>
+            <h1 id="welcomeTitle">Watch what you love.<br><em>Keep it simple.</em></h1>
+            <p>Explore videos without an account or a noisy feed. Your watch list and history stay right here on your device.</p>
+            <button class="banner-cta" id="startExploring" type="button">Find something to watch <span aria-hidden="true">↗</span></button>
+          </div>
+          <div class="welcome-art" aria-hidden="true">
+            <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+            <div class="art-disc"><img src="/assets/new_pipe_icon_5.svg" alt=""></div>
+            <div class="art-play"><svg viewBox="0 0 24 24"><path d="m9 6 10 6-10 6z"/></svg></div>
+            <span class="art-spark spark-one">✳</span><span class="art-spark spark-two">✦</span>
+          </div>
+          <div class="banner-grain"></div>
+        </section>
+
+        <section class="browse-section" aria-labelledby="sectionTitle">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker" id="sectionKicker">A LITTLE OF EVERYTHING</div>
+              <h2 id="sectionTitle">Trending in Malaysia</h2>
+            </div>
+            <div class="section-actions">
+              <span class="result-count" id="resultCount"></span>
+              <button class="refresh-button" id="refreshButton" type="button" aria-label="Refresh videos" title="Refresh">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.5-3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-row" aria-label="Quick searches">
+            <button class="filter-chip is-selected" data-query="" type="button">For you</button>
+            <button class="filter-chip" data-query="music" type="button">Music</button>
+            <button class="filter-chip" data-query="technology" type="button">Technology</button>
+            <button class="filter-chip" data-query="gaming" type="button">Gaming</button>
+            <button class="filter-chip" data-query="documentary" type="button">Documentaries</button>
+            <span class="filter-note">Searches use a public video API</span>
+          </div>
+
+          <div class="video-grid" id="videoGrid" aria-live="polite" aria-busy="true"></div>
+          <div class="error-panel" id="errorPanel" hidden>
+            <div class="error-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5m0 3h.01M10.3 3.8 2.5 17.3A1.8 1.8 0 0 0 4 20h16a1.8 1.8 0 0 0 1.5-2.7L13.7 3.8a2 2 0 0 0-3.4 0Z"/></svg></div>
+            <div><h3 id="errorTitle">Could not load videos</h3><p id="errorMessage">The selected API server may be unavailable. Choose another server in Settings and try again.</p></div>
+            <button class="subtle-button" id="errorSettings" type="button">Open settings</button>
+          </div>
+        </section>
+        <footer class="page-footer">
+          <span><b>NewPipe Web</b> is an independent web companion to the open-source NewPipe project.</span>
+          <span>Video data provided by the selected Piped API instance.</span>
+        </footer>
+      </div>
+    </main>
+
+    <nav class="mobile-nav" aria-label="Mobile navigation">
+      <button class="mobile-nav-item is-active" data-view="home" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+      <button class="mobile-nav-item" data-view="explore" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4.5 4.5M11 7v8M7 11h8"/></svg><span>Explore</span></button>
+      <button class="mobile-nav-item" data-view="saved" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-3.8L6 21z"/></svg><span>Saved</span></button>
+      <button class="mobile-nav-item" data-view="history" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/></svg><span>History</span></button>
+    </nav>
+
+    <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+      <form method="dialog" class="dialog-topline"><span class="dialog-kicker">PREFERENCES</span><button class="dialog-close" value="cancel" aria-label="Close settings">×</button></form>
+      <div class="dialog-body">
+        <div class="dialog-symbol"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3h-.2a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg></div>
+        <h2 id="settingsTitle">Make it yours.</h2>
+        <p class="dialog-intro">Pick the video service and region NewPipe Web should use.</p>
+        <label class="field-label" for="apiInput">Piped API server</label>
+        <input class="text-field" id="apiInput" type="url" inputmode="url" autocomplete="url" placeholder="https://api.piped.private.coffee">
+        <p class="field-help">Searches and playback requests go directly to this server. Use an instance you trust or host your own. <a href="https://github.com/TeamPiped/Piped/wiki/Instances" target="_blank" rel="noreferrer">Browse public instances ↗</a></p>
+        <label class="field-label" for="regionSelect">Trending region</label>
+        <select class="text-field select-field" id="regionSelect">
+          <option value="MY">Malaysia</option><option value="US">United States</option><option value="GB">United Kingdom</option><option value="IN">India</option><option value="DE">Germany</option><option value="JP">Japan</option><option value="SG">Singapore</option>
+        </select>
+        <div class="privacy-note"><span class="privacy-lock">⌑</span><span>Watch history and saved videos stay in this browser. No NewPipe Web account is created.</span></div>
+        <div class="dialog-actions"><button class="text-button" id="resetSettings" type="button">Reset</button><button class="primary-button" id="saveSettings" type="button">Save settings</button></div>
+      </div>
+    </dialog>
+
+    <dialog class="watch-dialog" id="watchDialog" aria-labelledby="watchTitle">
+      <div class="watch-topbar"><span class="watch-brand"><img src="/assets/new_pipe_icon_5.svg" alt=""> Now playing</span><button class="dialog-close watch-close" id="closeWatch" type="button" aria-label="Close player">×</button></div>
+      <div class="watch-layout">
+        <div class="player-column">
+          <div class="player-frame" id="playerFrame">
+            <video id="videoPlayer" controls playsinline preload="metadata"></video>
+            <div class="player-message" id="playerMessage">Loading video…</div>
+          </div>
+          <div class="watch-info"><div class="watch-heading"><div><h2 id="watchTitle">Video title</h2><p id="watchByline"></p></div><button class="save-current" id="saveCurrent" type="button"><span class="save-icon">＋</span><span>Save</span></button></div><p class="watch-description" id="watchDescription"></p></div>
+        </div>
+        <aside class="watch-side"><div class="watch-side-label">PLAYBACK</div><p class="playback-note">Playback is streamed from your selected API server. Available quality depends on the source.</p><div class="quality-wrap" id="qualityWrap" hidden><label for="qualitySelect">Quality</label><select id="qualitySelect" class="text-field select-field"></select></div><div class="watch-side-foot">NewPipe Web · Open source</div></aside>
+      </div>
+    </dialog>
+  </body>
+</html>
