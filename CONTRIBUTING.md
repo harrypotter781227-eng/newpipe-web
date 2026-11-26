@@ -20,6 +20,11 @@ Then open <http://localhost:8000>. Use a local server rather than opening
   reaches the DOM (`escapeHTML`, `safeHttpsUrl`).
 - Don't add inline scripts or `on*=` handlers; the Content-Security-Policy in
   `vercel.json` forbids them.
-- Run `node --check app.js` before opening a pull request.
+- Keep pure helpers in `lib.js` (DOM-free, loaded before `app.js`) so they
+  stay unit-testable. Add or update tests in `tests/app.test.js` when you
+  change them.
+- Run `npm run check` and `npm test` before opening a pull request
+  (CI runs the same commands). If you change `app.js`, `lib.js`, `app.css`,
+  or `index.html`, bump `CACHE_VERSION` in `sw.js`.
 
 By contributing you agree your work is licensed under GPL-3.0-or-later.

@@ -21,16 +21,22 @@ python3 -m http.server 8000   # or: npx serve .
 
 Open <http://localhost:8000>. There is nothing to install or build.
 
+Note: the site uses root-relative paths (`/app.js`, `/lib.js`, …), so it must be served from the domain root. Deploying under a subpath (e.g. a GitHub Pages project site) requires rewriting those paths.
+
 ## Project layout
 
 | Path | Purpose |
 | --- | --- |
 | `index.html` | Page markup, dialogs and navigation |
-| `app.css` | All styling |
+| `app.css` | All styling (fonts are self-hosted under `assets/fonts/`) |
+| `lib.js` | Pure, DOM-free helpers (escaping, URL validation, formatting) |
 | `app.js` | API calls, rendering, player, local storage |
-| `assets/` | NewPipe icon |
+| `sw.js` | Service worker: offline app shell (API/media are never cached) |
+| `manifest.webmanifest` | Installable-app manifest |
+| `assets/` | NewPipe icon and self-hosted fonts |
+| `tests/` | Unit tests for `lib.js` (`npm test`, no dependencies) |
 | `vercel.json` | Static-site settings and security headers (CSP etc.) |
-| `.github/workflows/ci.yml` | Syntax and sanity checks |
+| `.github/workflows/ci.yml` | Syntax checks and unit tests |
 
 ## Deploy on Vercel
 
@@ -38,9 +44,17 @@ Import this standalone repository into Vercel and use the repository root (`.`) 
 
 ## Video service
 
-The browser calls the selected Piped API server directly for search, trending results, video details, and stream URLs. The default is `https://pipedapi.kavin.rocks`; a public server can be unavailable or may change its policies. Open Settings to choose another server. The server you use can see your requests, so use an instance you trust or host your own.
+The browser calls the selected Piped API server directly for search, trending results, video details, and stream URLs. The default is `https://api.piped.private.coffee`; a public server can be unavailable or may change its policies. Open Settings to choose another server. The server you use can see your requests, so use an instance you trust or host your own.
 
 The API is documented at [docs.piped.video](https://docs.piped.video/docs/api-documentation/), and the public-instance list is maintained by [TeamPiped](https://github.com/TeamPiped/Piped/wiki/Instances).
+
+## Browser support
+
+The site targets current browsers. Playback notes:
+
+- Progressive (MP4/WebM) streams play everywhere.
+- HLS streams only play in browsers with native HLS support (Safari). Videos that offer only HLS show an explanation instead of failing silently.
+- The offline app shell (service worker) requires HTTPS or `localhost`.
 
 ## Disclaimer
 

@@ -1,0 +1,17 @@
+{
+  "name": "NewPipe Web",
+  "short_name": "NewPipe",
+  "description": "A simple, privacy-friendly way to explore and watch videos.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#101112",
+  "theme_color": "#101112",
+  "icons": [
+    {
+      "src": "/assets/new_pipe_icon_5.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

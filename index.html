@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -7,12 +8,16 @@
     <meta name="description" content="A simple, privacy-friendly way to explore and watch videos.">
     <title>NewPipe — watch without the noise</title>
     <link rel="icon" href="/assets/new_pipe_icon_5.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/assets/new_pipe_icon_5.svg">
+    <link rel="manifest" href="/manifest.webmanifest">
     <link rel="stylesheet" href="/app.css">
+    <script src="/lib.js" defer></script>
     <script src="/app.js" defer></script>
   </head>
   <body>
+    <a class="skip-link" href="#videoGrid">Skip to videos</a>
     <aside class="sidebar" aria-label="Main navigation">
-      <a class="brand" href="#home" aria-label="NewPipe home">
+      <a class="brand" href="#home" data-view="home" aria-label="NewPipe home">
         <img src="/assets/new_pipe_icon_5.svg" alt="">
         <span>New<span class="brand-accent">Pipe</span></span>
         <span class="beta-tag">WEB</span>
@@ -20,7 +25,7 @@
 
       <div class="side-label">LIBRARY</div>
       <nav class="nav-list">
-        <button class="nav-item is-active" data-view="home" type="button">
+        <button class="nav-item is-active" data-view="home" type="button" aria-current="page">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
           <span>Home</span>
         </button>
@@ -55,8 +60,8 @@
       <header class="topbar">
         <form class="search-form" id="searchForm" role="search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4.5 4.5"/></svg>
-          <input id="searchInput" name="q" type="search" placeholder="Search videos or paste a link" autocomplete="off" aria-label="Search videos or paste a video link">
-          <kbd>↵</kbd>
+          <input id="searchInput" name="q" type="search" placeholder="Search videos or paste a link" autocomplete="off" aria-label="Search videos or paste a video link" title="Press / to focus search">
+          <kbd>/</kbd>
           <button class="search-submit" type="submit" aria-label="Search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4.5 4.5"/></svg>
           </button>
@@ -102,18 +107,20 @@
           </div>
 
           <div class="filter-row" aria-label="Quick searches">
-            <button class="filter-chip is-selected" data-query="" type="button">For you</button>
-            <button class="filter-chip" data-query="music" type="button">Music</button>
-            <button class="filter-chip" data-query="technology" type="button">Technology</button>
-            <button class="filter-chip" data-query="gaming" type="button">Gaming</button>
-            <button class="filter-chip" data-query="documentary" type="button">Documentaries</button>
+            <button class="filter-chip is-selected" data-query="" type="button" aria-pressed="true">For you</button>
+            <button class="filter-chip" data-query="music" type="button" aria-pressed="false">Music</button>
+            <button class="filter-chip" data-query="technology" type="button" aria-pressed="false">Technology</button>
+            <button class="filter-chip" data-query="gaming" type="button" aria-pressed="false">Gaming</button>
+            <button class="filter-chip" data-query="documentary" type="button" aria-pressed="false">Documentaries</button>
             <span class="filter-note">Searches use a public video API</span>
           </div>
 
-          <div class="video-grid" id="videoGrid" aria-live="polite" aria-busy="true"></div>
+          <div class="video-grid" id="videoGrid" aria-busy="true" tabindex="-1"></div>
+          <p class="visually-hidden" id="gridStatus" role="status"></p>
           <div class="error-panel" id="errorPanel" hidden>
             <div class="error-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5m0 3h.01M10.3 3.8 2.5 17.3A1.8 1.8 0 0 0 4 20h16a1.8 1.8 0 0 0 1.5-2.7L13.7 3.8a2 2 0 0 0-3.4 0Z"/></svg></div>
             <div><h3 id="errorTitle">Could not load videos</h3><p id="errorMessage">The selected API server may be unavailable. Choose another server in Settings and try again.</p></div>
+            <button class="subtle-button" id="errorRetry" type="button">Try again</button>
             <button class="subtle-button" id="errorSettings" type="button">Open settings</button>
           </div>
         </section>
@@ -125,15 +132,16 @@
     </main>
 
     <nav class="mobile-nav" aria-label="Mobile navigation">
-      <button class="mobile-nav-item is-active" data-view="home" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+      <button class="mobile-nav-item is-active" data-view="home" type="button" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
       <button class="mobile-nav-item" data-view="explore" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4.5 4.5M11 7v8M7 11h8"/></svg><span>Explore</span></button>
       <button class="mobile-nav-item" data-view="saved" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-3.8L6 21z"/></svg><span>Saved</span></button>
       <button class="mobile-nav-item" data-view="history" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/></svg><span>History</span></button>
+      <button class="mobile-nav-item" data-view="settings" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3h-.2a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg><span>Settings</span></button>
     </nav>
 
     <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
       <form method="dialog" class="dialog-topline"><span class="dialog-kicker">PREFERENCES</span><button class="dialog-close" value="cancel" aria-label="Close settings">×</button></form>
-      <div class="dialog-body">
+      <form class="dialog-body" id="settingsForm">
         <div class="dialog-symbol"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 1 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 1 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3h-.2a1.8 1.8 0 1 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 1 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 1 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 1 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 1 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg></div>
         <h2 id="settingsTitle">Make it yours.</h2>
         <p class="dialog-intro">Pick the video service and region NewPipe Web should use.</p>
@@ -145,8 +153,8 @@
           <option value="MY">Malaysia</option><option value="US">United States</option><option value="GB">United Kingdom</option><option value="IN">India</option><option value="DE">Germany</option><option value="JP">Japan</option><option value="SG">Singapore</option>
         </select>
         <div class="privacy-note"><span class="privacy-lock">⌑</span><span>Watch history and saved videos stay in this browser. No NewPipe Web account is created.</span></div>
-        <div class="dialog-actions"><button class="text-button" id="resetSettings" type="button">Reset</button><button class="primary-button" id="saveSettings" type="button">Save settings</button></div>
-      </div>
+        <div class="dialog-actions"><button class="text-button" id="resetSettings" type="button">Reset</button><button class="primary-button" id="saveSettings" type="submit">Save settings</button></div>
+      </form>
     </dialog>
 
     <dialog class="watch-dialog" id="watchDialog" aria-labelledby="watchTitle">
@@ -162,5 +170,8 @@
         <aside class="watch-side"><div class="watch-side-label">PLAYBACK</div><p class="playback-note">Playback is streamed from your selected API server. Available quality depends on the source.</p><div class="quality-wrap" id="qualityWrap" hidden><label for="qualitySelect">Quality</label><select id="qualitySelect" class="text-field select-field"></select></div><div class="watch-side-foot">NewPipe Web · Open source</div></aside>
       </div>
     </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <noscript><div class="noscript-note">NewPipe Web needs JavaScript to load videos. Please enable JavaScript and reload the page.</div></noscript>
   </body>
 </html>
