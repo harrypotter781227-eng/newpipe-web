@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 (() => {
+  const { escapeHTML, safeHttpsUrl, normaliseApiBase, extractVideoIdFromUrl, normaliseItem, formatDuration, formatViews, validateStoredItems } = window.NewPipeLib;
   const DEFAULT_API = 'https://api.piped.private.coffee';
   const DEFAULT_REGION = 'MY';
   const STORAGE = {
@@ -11,6 +12,7 @@
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const ui = {
     grid: $('#videoGrid'),
+    gridStatus: $('#gridStatus'),
     errorPanel: $('#errorPanel'),
     errorMessage: $('#errorMessage'),
     connection: $('.connection-pill'),
@@ -24,7 +26,8 @@
     settingsDialog: $('#settingsDialog'),
     watchDialog: $('#watchDialog'),
     video: $('#videoPlayer'),
-    playerMessage: $('#playerMessage')
+    playerMessage: $('#playerMessage'),
+    toast: $('#toast')
   };
 
   function readJSON(key, fallback) {
@@ -37,55 +40,46 @@
   }
 
   function writeJSON(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* Local storage may be disabled. */ }
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch {
+      showToast('Could not save to this browser — storage may be full or disabled.');
+      return false;
+    }
   }
 
-  // Stored items are untrusted input (anyone can edit localStorage), so
-  // re-validate every field before it can reach the DOM.
   function readStoredItems(key) {
-    const raw = readJSON(key, []);
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .filter((item) => item && typeof item.id === 'string' && /^[A-Za-z0-9_-]{11}$/.test(item.id))
-      .map((item) => ({
-        id: item.id,
-        title: String(item.title || 'Untitled video'),
-        channel: String(item.channel || 'Unknown channel'),
-        avatar: safeHttpsUrl(item.avatar),
-        thumbnail: safeHttpsUrl(item.thumbnail),
-        duration: Number(item.duration) || 0,
-        views: Number(item.views) || 0,
-        uploaded: String(item.uploaded || ''),
-        description: String(item.description || '')
-      }));
+    return validateStoredItems(readJSON(key, []));
   }
 
   const savedSettings = readJSON(STORAGE.settings, {});
+  const regionOptions = $$('#regionSelect option').map((option) => option.value);
   const state = {
     api: normaliseApiBase(savedSettings.api) || DEFAULT_API,
-    region: /^[A-Z]{2}$/.test(savedSettings.region || '') ? savedSettings.region : DEFAULT_REGION,
+    region: regionOptions.includes(savedSettings.region) ? savedSettings.region : DEFAULT_REGION,
     saved: readStoredItems(STORAGE.saved),
     history: readStoredItems(STORAGE.history),
     view: 'home',
     items: [],
     playerRequest: 0,
     listRequest: 0,
+    listController: null,
+    playerController: null,
+    playerLoading: false,
+    playerTimer: 0,
     currentItem: null,
     playerStreams: [],
     lastQuery: ''
   };
 
-  function normaliseApiBase(value) {
-    if (typeof value !== 'string' || !value.trim()) return null;
-    try {
-      const url = new URL(value.trim());
-      const localHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname);
-      if ((!localHttp && url.protocol !== 'https:') || url.username || url.password || url.search || url.hash) return null;
-      url.pathname = url.pathname.replace(/\/+$/, '');
-      return url.origin + url.pathname;
-    } catch {
-      return null;
-    }
+  let toastTimer = 0;
+  function showToast(message) {
+    if (!ui.toast) return;
+    ui.toast.textContent = message;
+    ui.toast.classList.add('is-visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => ui.toast.classList.remove('is-visible'), 4500);
   }
 
   function setConnection(status, label) {
@@ -94,68 +88,41 @@
     ui.connectionLabel.textContent = label || (status === 'online' ? 'Connected' : status === 'offline' ? 'Service unavailable' : 'Connecting');
   }
 
-  function escapeHTML(value) {
-    return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
-  }
-
-  function safeHttpsUrl(value) {
-    if (typeof value !== 'string' || !value) return '';
-    const candidate = value.startsWith('//') ? `https:${value}` : value;
-    try {
-      const url = new URL(candidate);
-      return url.protocol === 'https:' ? url.href : '';
-    } catch {
-      return '';
-    }
-  }
-
-  async function apiGet(path, params = {}) {
+  async function apiGet(path, params = {}, externalSignal) {
     const url = new URL(`${state.api}${path}`);
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
     }
-    const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(14000) });
-    if (!response.ok) throw new Error(`Video service returned ${response.status}.`);
-    const payload = await response.json();
-    if (payload && !Array.isArray(payload) && payload.error) throw new Error(payload.error);
-    return payload;
-  }
-
-  function getVideoId(item) {
-    if (item?.videoId && /^[A-Za-z0-9_-]{11}$/.test(item.videoId)) return item.videoId;
-    const match = String(item?.url || '').match(/[?&]v=([A-Za-z0-9_-]{11})/) || String(item?.url || '').match(/\/([A-Za-z0-9_-]{11})(?:[/?#]|$)/);
-    return match ? match[1] : '';
-  }
-
-  function normaliseItem(item) {
-    const id = getVideoId(item);
-    if (!id) return null;
-    const avatar = safeHttpsUrl(item.uploaderAvatar || item.uploaderThumbnail || '');
-    return {
-      id,
-      title: item.title || 'Untitled video',
-      channel: item.uploaderName || item.uploader || item.author || 'Unknown channel',
-      avatar,
-      thumbnail: safeHttpsUrl(item.thumbnail || item.thumbnailUrl || item.thumbnailUrlHQ || ''),
-      duration: Number(item.duration || item.durationSeconds || 0),
-      views: Number(item.views || 0),
-      uploaded: item.uploadedDate || item.uploadDate || item.uploaded || '',
-      description: item.shortDescription || item.description || ''
-    };
-  }
-
-  function formatDuration(totalSeconds) {
-    const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
-    if (!seconds) return '';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainder = seconds % 60;
-    return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}` : `${minutes}:${String(remainder).padStart(2, '0')}`;
-  }
-
-  function formatViews(count) {
-    if (!Number.isFinite(count) || count <= 0) return '';
-    return `${new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(count)} views`;
+    // Manual timeout: AbortSignal.timeout is unavailable in older Safari.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 14000);
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort();
+      else externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+    try {
+      let response;
+      try {
+        response = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+      } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        throw new Error('Could not reach the API server. Check your connection or choose another server in Settings.');
+      }
+      if (!response.ok) throw new Error(`Video service returned ${response.status}.`);
+      let payload;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new Error('The API server returned an invalid response. Try another server in Settings.');
+      }
+      if (payload == null) throw new Error('The API server returned an empty response. Try another server in Settings.');
+      if (payload && !Array.isArray(payload) && typeof payload.error === 'string' && payload.error) throw new Error(payload.error);
+      return payload;
+    } finally {
+      clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
+    }
   }
 
   function showLoading() {
@@ -166,19 +133,21 @@
   }
 
   function showError(error) {
-    const message = error?.name === 'TimeoutError'
+    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+    const message = timedOut
       ? 'The video service took too long to respond. Try again or choose another API server in Settings.'
       : (error?.message || 'The selected API server may be unavailable. Choose another server in Settings and try again.');
     ui.errorMessage.textContent = message;
     ui.errorPanel.hidden = false;
+    ui.resultCount.textContent = '';
     ui.grid.classList.add('is-error');
     ui.grid.removeAttribute('aria-busy');
     ui.grid.innerHTML = '';
     setConnection('offline', 'Service unavailable');
   }
 
-  function emptyMarkup(title, description, actionLabel = '') {
-    return `<div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 10 6-10 6z"/><circle cx="12" cy="12" r="9"/></svg></div><h3>${escapeHTML(title)}</h3><p>${escapeHTML(description)}</p>${actionLabel ? `<button class="subtle-button" data-action="retry" type="button">${escapeHTML(actionLabel)}</button>` : ''}</div>`;
+  function emptyMarkup(title, description) {
+    return `<div class="empty-state"><div class="empty-state-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 10 6-10 6z"/><circle cx="12" cy="12" r="9"/></svg></div><h3>${escapeHTML(title)}</h3><p>${escapeHTML(description)}</p></div>`;
   }
 
   function updateSavedCount() {
@@ -200,10 +169,10 @@
     const saved = isSaved(item.id);
     const views = formatViews(item.views);
     const metadata = [views, item.uploaded].filter(Boolean).map(escapeHTML).join('<span aria-hidden="true">·</span>');
-    return `<article class="video-card" style="animation-delay:${Math.min(index * 35, 280)}ms">
+    return `<article class="video-card">
       <button class="thumb-button" data-action="play" data-index="${index}" type="button" aria-label="Play ${escapeHTML(item.title)}">
         <span class="thumb-fallback"><img src="/assets/new_pipe_icon_5.svg" alt=""></span>${thumb}
-        ${duration ? `<span class="duration-badge">${escapeHTML(duration)}</span>` : '<span class="live-badge">VIDEO</span>'}
+        ${item.isLive ? '<span class="live-badge">LIVE</span>' : (duration ? `<span class="duration-badge">${escapeHTML(duration)}</span>` : '')}
       </button>
       <div class="card-copy"><div class="channel-avatar">${avatar}</div>
         <div class="card-text"><h3 class="card-title">${escapeHTML(item.title)}</h3><div class="card-meta"><span class="channel-name">${escapeHTML(item.channel)}</span>${metadata ? `<span>${metadata}</span>` : ''}</div></div>
@@ -220,6 +189,7 @@
     ui.grid.classList.remove('is-error');
     ui.grid.removeAttribute('aria-busy');
     ui.resultCount.textContent = options.countLabel ?? (items.length ? `${items.length} videos` : '');
+    if (ui.gridStatus) ui.gridStatus.textContent = ui.resultCount.textContent || options.emptyTitle || '';
     if (!items.length) {
       ui.grid.innerHTML = emptyMarkup(options.emptyTitle || 'Nothing here yet', options.emptyDescription || 'Try another search or explore a different topic.');
       return;
@@ -247,14 +217,17 @@
     setHeading('A LITTLE OF EVERYTHING', `Trending in ${regionName(state.region)}`);
     showLoading();
     setConnection('pending');
+    state.listController?.abort();
+    const controller = new AbortController();
+    state.listController = controller;
     const requestId = ++state.listRequest;
     try {
-      const data = await apiGet('/trending', { region: state.region });
+      const data = await apiGet('/trending', { region: state.region }, controller.signal);
       if (requestId !== state.listRequest) return;
       if (!Array.isArray(data)) throw new Error('The API server returned an unexpected response.');
       const items = data.map(normaliseItem).filter(Boolean);
       setConnection('online');
-      $$('.filter-chip').forEach((chip) => chip.classList.toggle('is-selected', !chip.dataset.query));
+      updateFilterChips('');
       renderItems(items, { emptyTitle: 'No trending videos right now', emptyDescription: 'Try a search or choose another API server in Settings.' });
     } catch (error) {
       if (requestId !== state.listRequest) return;
@@ -265,7 +238,7 @@
   async function searchVideos(query) {
     const value = String(query || '').trim().slice(0, 160);
     if (!value) return loadTrending();
-    const directId = extractVideoId(value);
+    const directId = extractVideoIdFromUrl(value);
     if (directId) {
       openVideo({ id: directId, title: 'Video from link', channel: 'Video source', duration: 0, description: '' });
       return;
@@ -276,10 +249,13 @@
     setHeading('SEARCH RESULTS', `Results for “${value}”`);
     showLoading();
     setConnection('pending');
-    $$('.filter-chip').forEach((chip) => chip.classList.toggle('is-selected', chip.dataset.query === value));
+    updateFilterChips(value);
+    state.listController?.abort();
+    const controller = new AbortController();
+    state.listController = controller;
     const requestId = ++state.listRequest;
     try {
-      const data = await apiGet('/search', { q: value, filter: 'videos' });
+      const data = await apiGet('/search', { q: value, filter: 'videos' }, controller.signal);
       if (requestId !== state.listRequest) return;
       const results = Array.isArray(data) ? data : (data?.items || []);
       const items = results.filter((item) => !item.type || ['stream', 'video', 'shortVideo'].includes(item.type)).map(normaliseItem).filter(Boolean);
@@ -291,27 +267,35 @@
     }
   }
 
-  function extractVideoId(value) {
-    const input = value.trim();
-    if (/^[A-Za-z0-9_-]{11}$/.test(input)) return input;
-    const match = input.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/)|piped\.video\/watch\?(?:.*&)?v=)([A-Za-z0-9_-]{11})/i);
-    return match ? match[1] : '';
+  function updateNavigation() {
+    $$('[data-view]').forEach((button) => {
+      const active = button.dataset.view === state.view || (state.view === 'search' && button.dataset.view === 'explore');
+      button.classList.toggle('is-active', active);
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
   }
 
-  function updateNavigation() {
-    $$('[data-view]').forEach((button) => button.classList.toggle('is-active', button.dataset.view === state.view || (state.view === 'search' && button.dataset.view === 'explore')));
+  function updateFilterChips(selectedQuery) {
+    $$('.filter-chip').forEach((chip) => {
+      const selected = chip.dataset.query === selectedQuery;
+      chip.classList.toggle('is-selected', selected);
+      chip.setAttribute('aria-pressed', String(selected));
+    });
   }
 
   function navigate(view) {
+    if (view === 'settings') return openSettings();
     if (view === 'home') return loadTrending();
     state.listRequest++;
+    state.listController?.abort();
     state.view = view;
     updateNavigation();
-    $$('.filter-chip').forEach((chip) => chip.classList.toggle('is-selected', !chip.dataset.query && view === 'explore'));
+    updateFilterChips(view === 'explore' ? '' : null);
     if (view === 'explore') {
       setHeading('START WITH A SEARCH', 'What are you in the mood for?');
       renderItems([], { emptyTitle: 'Explore at your own pace', emptyDescription: 'Search for a video, paste a link, or pick a topic above. No account needed.' });
-      ui.searchInput.focus({ preventScroll: true });
+      if (window.matchMedia('(pointer: fine)').matches) ui.searchInput.focus({ preventScroll: true });
     } else if (view === 'saved') {
       setHeading('YOUR PERSONAL LIST', 'Watch later');
       renderItems([...state.saved], { emptyTitle: 'Your list is yours to build', emptyDescription: 'Use the bookmark on any video to save it here. It stays in this browser.' });
@@ -329,7 +313,15 @@
     if (state.view === 'saved') {
       renderItems([...state.saved], { emptyTitle: 'Your list is yours to build', emptyDescription: 'Use the bookmark on any video to save it here. It stays in this browser.' });
     } else {
-      renderItems([...state.items], { countLabel: ui.resultCount.textContent });
+      // Update the bookmark button in place so focus and scroll are kept.
+      const index = state.items.findIndex((entry) => entry.id === item.id);
+      const button = index >= 0 ? ui.grid.querySelector(`[data-action="save"][data-index="${index}"]`) : null;
+      if (button) {
+        const saved = !exists;
+        button.classList.toggle('is-saved', saved);
+        button.setAttribute('aria-label', saved ? 'Remove from Watch later' : 'Add to Watch later');
+        button.title = saved ? 'Remove from Watch later' : 'Save for later';
+      }
     }
     updateCurrentSaveButton();
   }
@@ -375,11 +367,37 @@
     ui.playerMessage.classList.add('is-hidden');
   }
 
+  function setCaptions(subtitles) {
+    ui.video.querySelectorAll('track').forEach((track) => track.remove());
+    (subtitles || []).filter((sub) => sub && safeHttpsUrl(sub.url)).forEach((sub, index) => {
+      const track = document.createElement('track');
+      track.kind = 'subtitles';
+      track.label = String(sub.name || sub.language || `Caption ${index + 1}`);
+      track.srclang = String(sub.language || 'und').slice(0, 12);
+      track.src = safeHttpsUrl(sub.url);
+      if (index === 0) track.mode = 'showing';
+      ui.video.appendChild(track);
+    });
+  }
+
+  function clearPlayerTimer() {
+    if (state.playerTimer) {
+      clearTimeout(state.playerTimer);
+      state.playerTimer = 0;
+    }
+  }
+
   async function openVideo(item) {
     if (!item?.id || !/^[A-Za-z0-9_-]{11}$/.test(item.id)) return;
     state.currentItem = item;
+    state.playerController?.abort();
+    const controller = new AbortController();
+    state.playerController = controller;
     const requestId = ++state.playerRequest;
     state.playerStreams = [];
+    state.playerLoading = false;
+    clearPlayerTimer();
+    setCaptions([]);
     ui.video.pause();
     ui.video.removeAttribute('src');
     ui.video.load();
@@ -388,15 +406,13 @@
     $('#watchDescription').textContent = item.description || '';
     $('#qualityWrap').hidden = true;
     $('#qualitySelect').innerHTML = '';
-    $('#playerFrame').classList.toggle('has-poster', Boolean(item.thumbnail));
     if (item.thumbnail) ui.video.poster = item.thumbnail;
     else ui.video.removeAttribute('poster');
     setPlayerMessage('Finding a browser-ready stream…');
     updateCurrentSaveButton();
-    addToHistory(item);
     if (!ui.watchDialog.open) ui.watchDialog.showModal();
     try {
-      const data = await apiGet(`/streams/${encodeURIComponent(item.id)}`);
+      const data = await apiGet(`/streams/${encodeURIComponent(item.id)}`, {}, controller.signal);
       if (requestId !== state.playerRequest) return;
       const streams = Array.isArray(data.videoStreams) ? data.videoStreams : [];
       const progressive = streams
@@ -404,8 +420,13 @@
         .sort((a, b) => Number(b.height || 0) - Number(a.height || 0));
       state.playerStreams = progressive;
       const hls = safeHttpsUrl(data.hls || '');
-      if (!progressive.length && !hls) {
-        setPlayerMessage('This source does not currently offer a browser-ready video stream. Try another API server.', true);
+      // Native HLS playback only works in Safari; never hand an HLS URL to
+      // a browser that cannot play it.
+      const hlsPlayable = Boolean(hls) && ui.video.canPlayType('application/vnd.apple.mpegurl') !== '';
+      if (!progressive.length && !hlsPlayable) {
+        setPlayerMessage(hls
+          ? 'This video only offers a stream format your browser cannot play directly. Try another video or API server.'
+          : 'This source does not currently offer a browser-ready video stream. Try another API server.', true);
         return;
       }
       refreshStoredItem(item.id, {
@@ -415,8 +436,11 @@
         thumbnail: safeHttpsUrl(data.thumbnailUrl),
         avatar: safeHttpsUrl(data.uploaderAvatar),
         duration: Number(data.duration) || 0,
-        views: Number(data.views) || 0
+        views: Number(data.views) || 0,
+        isLive: Boolean(data.isLive)
       });
+      addToHistory(state.currentItem);
+      setCaptions(data.subtitles);
       if (data.title) $('#watchTitle').textContent = data.title;
       if (data.uploader) $('#watchByline').textContent = data.uploader;
       if (data.description) $('#watchDescription').textContent = data.description;
@@ -424,14 +448,21 @@
       if (progressive.length > 1) {
         $('#qualityWrap').hidden = false;
         $('#qualitySelect').innerHTML = progressive.map((stream, index) => `<option value="${index}">${escapeHTML(stream.quality || (stream.height ? `${stream.height}p` : stream.format || 'Video'))}${stream.fps ? ` · ${escapeHTML(stream.fps)} fps` : ''}</option>`).join('');
-        $('#qualitySelect').addEventListener('change', selectQuality);
       }
       ui.video.src = progressive[0]?.url || hls;
+      state.playerLoading = true;
       ui.video.load();
+      state.playerTimer = setTimeout(() => {
+        if (requestId === state.playerRequest && state.playerLoading && ui.watchDialog.open) {
+          state.playerLoading = false;
+          setPlayerMessage('The stream is taking a long time to load. Check your connection or try another API server.', true);
+        }
+      }, 25000);
       ui.video.play().catch(() => {});
     } catch (error) {
       if (requestId !== state.playerRequest) return;
-      setPlayerMessage(error?.name === 'TimeoutError' ? 'The video service timed out. Try another instance in Settings.' : 'Could not load this video. The API server may be unavailable.', true);
+      const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+      setPlayerMessage(timedOut ? 'The video service timed out. Try another instance in Settings.' : 'Could not load this video. The API server may be unavailable.', true);
     }
   }
 
@@ -450,6 +481,7 @@
   }
 
   function openSettings() {
+    if (ui.settingsDialog.open) return;
     $('#apiInput').value = state.api;
     $('#regionSelect').value = state.region;
     ui.settingsDialog.showModal();
@@ -487,11 +519,23 @@
       loadTrending();
     }
   }));
-  $$('[data-view]').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.view)));
+  $$('[data-view]').forEach((button) => button.addEventListener('click', (event) => {
+    event.preventDefault();
+    navigate(button.dataset.view);
+  }));
   $('#openSettings').addEventListener('click', openSettings);
   $('#topSettings').addEventListener('click', openSettings);
   $('#errorSettings').addEventListener('click', openSettings);
-  $('#saveSettings').addEventListener('click', saveSettings);
+  $('#settingsForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    saveSettings();
+  });
+  $('#qualitySelect').addEventListener('change', selectQuality);
+  $('#errorRetry').addEventListener('click', () => {
+    if (state.view === 'home') loadTrending();
+    else if (state.view === 'search') searchVideos(state.lastQuery);
+    else navigate(state.view);
+  });
   $('#resetSettings').addEventListener('click', () => {
     $('#apiInput').value = DEFAULT_API;
     $('#regionSelect').value = DEFAULT_REGION;
@@ -508,14 +552,27 @@
   $('#closeWatch').addEventListener('click', () => ui.watchDialog.close());
   ui.watchDialog.addEventListener('close', () => {
     state.playerRequest++;
+    state.playerController?.abort();
     state.playerStreams = [];
+    state.playerLoading = false;
+    clearPlayerTimer();
+    setCaptions([]);
     ui.video.pause();
     ui.video.removeAttribute('src');
     ui.video.load();
   });
-  ui.video.addEventListener('loadedmetadata', hidePlayerMessage);
+  ui.video.addEventListener('loadedmetadata', () => {
+    state.playerLoading = false;
+    clearPlayerTimer();
+    hidePlayerMessage();
+  });
   ui.video.addEventListener('error', () => {
-    if (ui.watchDialog.open && ui.video.currentSrc) setPlayerMessage('This stream could not be played by your browser. Try a different video or API server.', true);
+    if (!ui.watchDialog.open) return;
+    if (state.playerLoading || ui.video.currentSrc) {
+      state.playerLoading = false;
+      clearPlayerTimer();
+      setPlayerMessage('This stream could not be played by your browser. Try a different video or API server.', true);
+    }
   });
   $('#saveCurrent').addEventListener('click', () => {
     if (state.currentItem) toggleSaved(state.currentItem);
@@ -529,8 +586,6 @@
     } else if (button.dataset.action === 'save') {
       const item = state.items[Number(button.dataset.index)];
       if (item) toggleSaved(item);
-    } else if (button.dataset.action === 'retry') {
-      state.view === 'home' ? loadTrending() : searchVideos(ui.searchInput.value);
     }
   });
   document.addEventListener('keydown', (event) => {
@@ -543,4 +598,7 @@
   $('#regionSelect').value = state.region;
   updateSavedCount();
   loadTrending();
+  if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 })();
